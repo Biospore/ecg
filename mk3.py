@@ -63,6 +63,69 @@ def get_max(samples):
 def get_min(samples):
     return min([len(x) for x in samples])
 
+def _test_fit(X, smin=None):
+    if not smin:
+        smin = get_min(X)
+    Xs = []
+    flag = True
+    for x in X:
+        while len(x) > smin:
+            if flag:
+                x = x[1:]
+            else:
+                x = x[:-1]
+        Xs.append(x)
+    return Xs, smin
+
+def test_separate(filename, freq):
+    clf = svm.SVC()
+    clf = KNeighborsClassifier()
+    normal = load_signals('normal', 16)
+    s_tachycardia = load_signals('sinus_tachycardia', 16)
+    s_bradycardia = load_signals('sinus_bradycardia', 16)
+    v_tachycardia = load_signals('ventricular_tachycardia', 16)
+
+    filtered_normal = _test_prepare(normal)
+    filtered_s_tachycardia = _test_prepare(s_tachycardia)
+    filtered_s_bradycardia = _test_prepare(s_bradycardia)
+    filtered_v_tachycardia = _test_prepare(v_tachycardia)
+
+    X = filtered_normal + filtered_s_tachycardia + filtered_s_bradycardia + filtered_v_tachycardia
+
+    y = 	['normal' 	 for x in filtered_normal]
+    y +=	['sinus_tachycardia' for x in filtered_s_tachycardia]
+    y +=	['sinus_bradycardia' for x in filtered_s_bradycardia]
+    y +=    ['ventricular_tachycardia' for x in filtered_v_tachycardia]
+    X, smin = _test_fit(X)
+    clf.fit(X, y)
+    """
+    signal1 = load_all_lines_as_ints('rsamples/ecg1sbrad1.txt')
+    signal2 = load_all_lines_as_ints('rsamples/ecg2sbrad1.txt')
+    predict1 = _test_prepare([signal1], 360)
+    fitted1, _ = _test_fit(predict1, smin)
+    predict2 = _test_prepare([signal2], 360)
+    fitted2, _ = _test_fit(predict2, smin)
+    """
+    signal = load_all_lines_as_ints(filename)
+    predict = _test_prepare([signal], freq)
+    fitted, _ = _test_fit(predict, smin)
+
+    result = []
+    for f in fitted:
+        if len(f) < smin:
+            continue
+        result.append(clf.predict(f)[0])
+
+    return result
+
+def _test_prepare(signals, freq=360):
+    result = []
+    for signal in signals:
+        rpeaks = get_rpeaks(signal, freq)[1:]
+        for c in range(len(rpeaks) - 1):
+            result.append(signal[rpeaks[c]:rpeaks[c+1]])
+    return result
+
 def fit_for_svm(X, smax):
     Xs = []
     for x in X:
@@ -75,77 +138,30 @@ def fit_for_svm(X, smax):
         Xs.append(x)
     return Xs
 
-def knn_rpeaks(filename, sampling_rate=360):
-    clf = KNeighborsClassifier()
-
-    normal = load_signals('normal', 16)
-    s_tachycardia = load_signals('sinus_tachycardia', 16)
-    s_bradycardia = load_signals('sinus_bradycardia', 16)
-
-    filtered_normal = []
-    for signal in normal:
+def prepare(func, signals):
+    result = []
+    for signal in signals:
         rpeaks = get_rpeaks(signal)
-        res = rpeaks
-        filtered_normal.append(res)
-
-    filtered_s_tachycardia = []
-    for signal in s_tachycardia:
-        rpeaks = get_rpeaks(signal)
-        res = rpeaks
-        filtered_s_tachycardia.append(res)
-
-    filtered_s_bradycardia = []
-    for signal in s_bradycardia:
-        rpeaks = get_rpeaks(signal)
-        res = rpeaks
-        filtered_s_bradycardia.append(res)
-
-    X = filtered_normal + filtered_s_tachycardia + filtered_s_bradycardia
-
-    signal = load_all_lines_as_ints(filename)
-
-    predict = [get_rpeaks(signal, sampling_rate)]
-
-    smax = get_min(X + predict)
-    X = fit_for_svm(X, smax)
-    predict = fit_for_svm(predict, smax)
-
-    y = 	['normal' 	 for x in range(16)]
-    y +=	['sinus_tachycardia' for x in range(16)]
-    y +=	['sinus_bradycardia' for x in range(16)]
-
-    clf.fit(X, y)
-
-    return clf.predict(predict)[0]
+        result.append([func(get_diff(rpeaks))])
+    return result
 
 def train_max(clf):
     normal = load_signals('normal', 16)
     s_tachycardia = load_signals('sinus_tachycardia', 16)
     s_bradycardia = load_signals('sinus_bradycardia', 16)
+    v_tachycardia = load_signals('ventricular_tachycardia', 16)
 
-    filtered_normal = []
-    for signal in normal:
-        rpeaks = get_rpeaks(signal)
-        res = [max(get_diff(rpeaks))]
-        filtered_normal.append(res)
+    filtered_normal = prepare(max, normal)
+    filtered_s_tachycardia = prepare(max, s_tachycardia)
+    filtered_s_bradycardia = prepare(max, s_bradycardia)
+    filtered_v_tachycardia = prepare(max, v_tachycardia)
 
-    filtered_s_tachycardia = []
-    for signal in s_tachycardia:
-        rpeaks = get_rpeaks(signal)
-        res = [max(get_diff(rpeaks))]
-        filtered_s_tachycardia.append(res)
-
-    filtered_s_bradycardia = []
-    for signal in s_bradycardia:
-        rpeaks = get_rpeaks(signal)
-        res = [max(get_diff(rpeaks))]
-        filtered_s_bradycardia.append(res)
-
-    X = filtered_normal + filtered_s_tachycardia + filtered_s_bradycardia
+    X = filtered_normal + filtered_s_tachycardia + filtered_s_bradycardia + filtered_v_tachycardia
 
     y = 	['normal' 	 for x in range(16)]
     y +=	['sinus_tachycardia' for x in range(16)]
     y +=	['sinus_bradycardia' for x in range(16)]
+    y +=    ['ventricular_tachycardia' for x in range(16)]
 
     clf.fit(X, y)
     return clf
@@ -154,37 +170,26 @@ def train_min(clf):
     normal = load_signals('normal', 16)
     s_tachycardia = load_signals('sinus_tachycardia', 16)
     s_bradycardia = load_signals('sinus_bradycardia', 16)
+    v_tachycardia = load_signals('ventricular_tachycardia', 16)
 
-    filtered_normal = []
-    for signal in normal:
-        rpeaks = get_rpeaks(signal)
-        res = [min(get_diff(rpeaks))]
-        filtered_normal.append(res)
+    filtered_normal = prepare(min, normal)
+    filtered_s_tachycardia = prepare(min, s_tachycardia)
+    filtered_s_bradycardia = prepare(min, s_bradycardia)
+    filtered_v_tachycardia = prepare(min, v_tachycardia)
 
-    filtered_s_tachycardia = []
-    for signal in s_tachycardia:
-        rpeaks = get_rpeaks(signal)
-        res = [min(get_diff(rpeaks))]
-        filtered_s_tachycardia.append(res)
 
-    filtered_s_bradycardia = []
-    for signal in s_bradycardia:
-        rpeaks = get_rpeaks(signal)
-        res = [min(get_diff(rpeaks))]
-        filtered_s_bradycardia.append(res)
-
-    X = filtered_normal + filtered_s_tachycardia + filtered_s_bradycardia
+    X = filtered_normal + filtered_s_tachycardia + filtered_s_bradycardia + filtered_v_tachycardia
 
     y = 	['normal' 	 for x in range(16)]
     y +=	['sinus_tachycardia' for x in range(16)]
     y +=	['sinus_bradycardia' for x in range(16)]
+    y +=    ['ventricular_tachycardia' for x in range(16)]
 
     clf.fit(X, y)
     return clf
 
 def knn_rpeaks_max(filename, classifier, sampling_rate=360):
     clf = classifier
-    
     signal = load_all_lines_as_ints(filename)
 
     rpeaks = get_rpeaks(signal, sampling_rate)
